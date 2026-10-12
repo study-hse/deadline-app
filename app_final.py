@@ -1,10 +1,23 @@
 """Deadline Tracker: маленький сервис для учебных дедлайнов."""
 
-from fastapi import FastAPI
+from datetime import date
+
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 
 VERSION = "1.0.0"
 
 app = FastAPI(title="Deadline Tracker", version=VERSION)
+
+# Данные хранятся в памяти: при перезапуске сервиса список очищается.
+deadlines = []
+counter = {"next_id": 1}
+
+
+class DeadlineIn(BaseModel):
+    title: str
+    subject: str
+    due_date: date
 
 
 @app.get("/")
@@ -20,3 +33,28 @@ def health():
 @app.get("/version")
 def version():
     return {"version": VERSION}
+
+
+@app.get("/deadlines")
+def list_deadlines(subject: str | None = None):
+    if subject is None:
+        return deadlines
+    return [d for d in deadlines if d["subject"] == subject]
+
+
+@app.post("/deadlines", status_code=201)
+def create_deadline(data: DeadlineIn):
+    if not data.title.strip():
+        raise HTTPException(status_code=400, detail="Название не может быть пустым")
+    if data.due_date < date.today():
+        raise HTTPException(status_code=400, detail="Срок не может быть в прошлом")
+    item = {
+        "id": counter["next_id"],
+        "title": data.title,
+        "subject": data.subject,
+        "due_date": data.due_date.isoformat(),
+        "done": False,
+    }
+    counter["next_id"] += 1
+    deadlines.append(item)
+    return item
