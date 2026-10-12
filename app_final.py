@@ -42,6 +42,14 @@ def list_deadlines(subject: str | None = None):
     return [d for d in deadlines if d["subject"] == subject]
 
 
+@app.get("/deadlines/{deadline_id}")
+def get_deadline(deadline_id: int):
+    for d in deadlines:
+        if d["id"] == deadline_id:
+            return d
+    raise HTTPException(status_code=404, detail="Задание не найдено")
+
+
 @app.post("/deadlines", status_code=201)
 def create_deadline(data: DeadlineIn):
     if not data.title.strip():
@@ -58,3 +66,12 @@ def create_deadline(data: DeadlineIn):
     counter["next_id"] += 1
     deadlines.append(item)
     return item
+
+
+@app.post("/deadlines/{deadline_id}/done")
+def mark_done(deadline_id: int):
+    for d in deadlines:
+        if d["id"] == deadline_id:
+            d["done"] = True
+            return d
+    raise HTTPException(status_code=404, detail="Задание не найдено")
