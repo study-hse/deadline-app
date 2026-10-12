@@ -1,6 +1,8 @@
 """Deadline Tracker: маленький сервис для учебных дедлайнов."""
 
+import logging
 import os
+from contextlib import asynccontextmanager
 from datetime import date, timedelta
 
 from fastapi import FastAPI, HTTPException
@@ -8,7 +10,20 @@ from pydantic import BaseModel
 
 VERSION = "1.0.0"
 
-app = FastAPI(title="Deadline Tracker", version=VERSION)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(message)s",
+)
+logger = logging.getLogger("deadline_tracker")
+
+
+@asynccontextmanager
+async def lifespan(_app):
+    logger.info("Сервис запущен, WARN_DAYS=%s", get_warn_days())
+    yield
+
+
+app = FastAPI(title="Deadline Tracker", version=VERSION, lifespan=lifespan)
 
 # Данные хранятся в памяти: при перезапуске сервиса список очищается.
 deadlines = []
@@ -62,6 +77,7 @@ def upcoming(days: int | None = None):
         if not d["done"] and today <= due <= limit:
             result.append({**d, "days_left": (due - today).days})
     result.sort(key=lambda item: item["due_date"])
+    logger.info("Запрос ближайших дедлайнов на %s дн.: найдено %s", days, len(result))
     return result
 
 
@@ -70,6 +86,7 @@ def get_deadline(deadline_id: int):
     for d in deadlines:
         if d["id"] == deadline_id:
             return d
+    logger.warning("Запрошено несуществующее задание %s", deadline_id)
     raise HTTPException(status_code=404, detail="Задание не найдено")
 
 
@@ -88,6 +105,7 @@ def create_deadline(data: DeadlineIn):
     }
     counter["next_id"] += 1
     deadlines.append(item)
+    logger.info("Добавлено задание %s: %s", item["id"], item["title"])
     return item
 
 
@@ -96,5 +114,7 @@ def mark_done(deadline_id: int):
     for d in deadlines:
         if d["id"] == deadline_id:
             d["done"] = True
+            logger.info("Задание %s отмечено выполненным", deadline_id)
             return d
+    logger.warning("Попытка отметить несуществующее задание %s", deadline_id)
     raise HTTPException(status_code=404, detail="Задание не найдено")
