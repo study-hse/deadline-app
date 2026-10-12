@@ -1,6 +1,7 @@
 """Deadline Tracker: маленький сервис для учебных дедлайнов."""
 
-from datetime import date
+import os
+from datetime import date, timedelta
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
@@ -18,6 +19,11 @@ class DeadlineIn(BaseModel):
     title: str
     subject: str
     due_date: date
+
+
+def get_warn_days() -> int:
+    """Сколько дней считается «горящим» сроком (из переменной окружения)."""
+    return int(os.getenv("WARN_DAYS", "3"))
 
 
 @app.get("/")
@@ -40,6 +46,23 @@ def list_deadlines(subject: str | None = None):
     if subject is None:
         return deadlines
     return [d for d in deadlines if d["subject"] == subject]
+
+
+# Этот маршрут должен идти ДО /deadlines/{deadline_id},
+# иначе слово "upcoming" будет принято за номер задания.
+@app.get("/deadlines/upcoming")
+def upcoming(days: int | None = None):
+    if days is None:
+        days = get_warn_days()
+    today = date.today()
+    limit = today + timedelta(days=days)
+    result = []
+    for d in deadlines:
+        due = date.fromisoformat(d["due_date"])
+        if not d["done"] and today <= due <= limit:
+            result.append({**d, "days_left": (due - today).days})
+    result.sort(key=lambda item: item["due_date"])
+    return result
 
 
 @app.get("/deadlines/{deadline_id}")
